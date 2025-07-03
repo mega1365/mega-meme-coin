@@ -1,15 +1,48 @@
-# Remix compiler artifacts
-**/artifacts/
-**/artifacts/**
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-# Remix plugin state folders
-deps/
-states/
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-# Debug info
-*.dbg.json
-*.tsbuildinfo
+contract GrokMeme is ERC20, Ownable {
+    uint256 private constant TOTAL_SUPPLY = 1_000_000_000 * 10**18; // 1 میلیارد توکن با 18 اعشار
+    uint256 public constant MAX_BURN_PER_TX = 10_000 * 10**18; // حداکثر توکن قابل سوزاندن در هر تراکنش
+    bool public isTradingEnabled = false; // برای فعال/غیرفعال کردن ترید
 
-# Optional
-.env
-.env.local
+    event TokensBurned(address indexed burner, uint256 amount);
+    event TradingToggled(bool enabled);
+
+    constructor() ERC20("GrokMeme", "GROKM") Ownable(msg.sender) {
+        _mint(msg.sender, TOTAL_SUPPLY); // کل عرضه به سازنده قرارداد
+    }
+
+    // فعال/غیرفعال کردن امکان ترید توکن
+    function toggleTrading(bool _enabled) external onlyOwner {
+        isTradingEnabled = _enabled;
+        emit TradingToggled(_enabled);
+    }
+
+    // تابع انتقال توکن با بررسی فعال بودن ترید
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
+        require(isTradingEnabled || msg.sender == owner(), "Trading is not enabled yet");
+        return super.transfer(recipient, amount);
+    }
+
+    // تابع انتقال از آدرس دیگر (برای allowance)
+    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
+        require(isTradingEnabled || msg.sender == owner(), "Trading is not enabled yet");
+        return super.transferFrom(sender, recipient, amount);
+    }
+
+    // تابع سوزاندن توکن‌ها
+    function burn(uint256 amount) external {
+        require(amount <= MAX_BURN_PER_TX, "Burn amount exceeds maximum limit");
+        _burn(msg.sender, amount);
+        emit TokensBurned(msg.sender, amount);
+    }
+
+    // تابع برای دریافت اطلاعات توکن
+    function getTokenInfo() external view returns (string memory name, string memory symbol, uint256 totalSupply, uint256 decimals) {
+        return (name(), symbol(), totalSupply(), decimals());
+    }
+}
